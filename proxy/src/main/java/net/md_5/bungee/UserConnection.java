@@ -11,14 +11,7 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.util.internal.PlatformDependent;
 import java.net.InetSocketAddress;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Queue;
-import java.util.UUID;
+import java.util.*;
 import java.util.logging.Level;
 import lombok.Getter;
 import lombok.NonNull;
@@ -38,6 +31,7 @@ import net.md_5.bungee.api.event.ServerConnectEvent;
 import net.md_5.bungee.api.score.Scoreboard;
 import net.md_5.bungee.chat.ComponentSerializer;
 import net.md_5.bungee.connection.InitialHandler;
+import net.md_5.bungee.connection.LoginResult;
 import net.md_5.bungee.entitymap.EntityMap;
 import net.md_5.bungee.forge.ForgeClientHandler;
 import net.md_5.bungee.forge.ForgeConstants;
@@ -178,8 +172,30 @@ public final class UserConnection implements ProxiedPlayer
 
         forgeClientHandler = new ForgeClientHandler( this );
 
-        // Set whether the connection has a 1.8 FML marker in the handshake.
-        forgeClientHandler.setFmlTokenInHandshake( this.getPendingConnection().getExtraDataInHandshake().contains( ForgeConstants.FML_HANDSHAKE_TOKEN ) );
+        // Set whether the connection has a 1.8 FML marker in the handshake.        if (this.getPendingConnection().getExtraDataInHandshake().contains( ForgeConstants.FML_HANDSHAKE_TOKEN ))
+        {
+            forgeClientHandler.setFmlTokenInHandshake( true );
+
+            // If we IP forward, add the a FML marker to the game profile.
+            if ( BungeeCord.getInstance().config.isIpForward() )
+            {
+                // Get the user profile.
+                LoginResult profile = pendingConnection.getLoginProfile();
+
+                // Get the current properties and copy them into a slightly bigger array.
+                LoginResult.Property[] oldp = profile.getProperties();
+                LoginResult.Property[] newp = Arrays.copyOf( oldp, oldp.length + 2 );
+
+                // Add a new profile property that specifies that this user is a Forge user.
+                newp[newp.length - 2] = new LoginResult.Property( ForgeConstants.FML_LOGIN_PROFILE, "true", null );
+
+                // If we do not perform the replacement, then the IP Forwarding code in Spigot et. al. will try to split on this prematurely.
+                newp[newp.length - 1] = new LoginResult.Property( ForgeConstants.EXTRA_DATA, pendingConnection.getExtraDataInHandshake().replaceAll( "\0", "\1"), "" );
+
+                // Set the properties in the profile. All done.
+                profile.setProperties( newp );
+            }
+        }
     }
 
     public void sendPacket(PacketWrapper packet)
